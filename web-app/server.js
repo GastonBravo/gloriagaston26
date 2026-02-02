@@ -1,86 +1,86 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require("socket.io");
-const path = require('path');
-const { Game } = require('./common/game-logic');
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { Dealer } from './src/logic/Dealer.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: { origin: "*" }
+});
 
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/common', express.static(path.join(__dirname, 'common')));
+// CAMBIO SPEC 1: Servir archivos de producción
+const distPath = path.join(__dirname, 'dist');
+app.use(express.static(distPath));
 
-const game = new Game();
+// Ruta explícita para la raíz y fallback para asegurar que index.html se sirva
+app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+});
+
+console.log('Sirviendo estáticos desde:', distPath);
+
+const dealer = new Dealer();
+let p1 = null;
+let p2 = null;
 
 io.on('connection', (socket) => {
-    console.log('a user connected', socket.id);
+    console.log('Cliente conectado:', socket.id);
 
-    socket.on('join', (data) => {
-        const name = data ? data.name : null;
-        if (game.addPlayer(socket.id, name)) {
-            socket.emit('joined', { playerId: socket.id });
-            io.emit('player_update', { count: Object.keys(game.players).length });
-
-            if (Object.keys(game.players).length === 2 && game.status === 'waiting') {
-                game.startGame();
-                io.emit('game_start', { newState: getPublicGameState() });
-            }
+    socket.on('join_game', (playerName) => {
+        if (!p1) {
+            p1 = { id: socket.id, name: playerName, socket };
+            socket.emit('waiting_opponent');
+        } else if (!p2) {
+            p2 = { id: socket.id, name: playerName, socket };
+            startGame();
         } else {
-            socket.emit('error', 'Game full');
+            socket.emit('error_message', 'Partida llena');
         }
     });
 
-    socket.on('play_card', (data) => {
-        // data: { source, sourceIndex, target, targetIndex }
-        const result = game.playCard(socket.id, data.source, data.sourceIndex, data.target, data.targetIndex);
-        if (result.success) {
-            io.emit('game_update', { newState: getPublicGameState() });
-        } else {
-            socket.emit('error', result.message);
-        }
-    });
-
-    socket.on('discard', (data) => {
-        // data: { cardIndex, discardPileIndex }
-        const result = game.discard(socket.id, data.cardIndex, data.discardPileIndex);
-        if (result) {
-            io.emit('game_update', { newState: getPublicGameState() });
-        } else {
-            socket.emit('error', 'Invalid discard');
+    socket.on('player_move', (move) => {
+        // CAMBIO SPEC 1: Reenviar movimientos entre p1 y p2
+        if (socket.id === p1?.id) {
+            p2?.socket.emit('game_update', { move, from: 'opponent' });
+            p1?.socket.emit('move_confirmed', { move }); // Confirmación para sonido
+        } else if (socket.id === p2?.id) {
+            p1?.socket.emit('game_update', { move, from: 'opponent' });
+            p2?.socket.emit('move_confirmed', { move }); // Confirmación para sonido
         }
     });
 
     socket.on('disconnect', () => {
-        console.log('user disconnected', socket.id);
-        // Handle disconnect (reset game?)
-        if (game.players[socket.id]) {
-            delete game.players[socket.id];
-            game.status = 'waiting';
-            game.turn = null;
-            // Reset logic or pause? For simplicity, reset.
-            io.emit('player_update', { count: Object.keys(game.players).length });
-            io.emit('game_reset', 'Player disconnected');
-        }
+        if (socket.id === p1?.id) p1 = null;
+        if (socket.id === p2?.id) p2 = null;
+        io.emit('player_disconnected');
     });
 });
 
-function getPublicGameState() {
-    // Mask hands of other players? For now send distinct state per player?
-    // Or just send everything and let client hide it (insecure but faster for dev).
-    // Let's send a sanitized version if possible, but for 2 players, client.js can filter.
-    // Actually, to show "opponent has 6 cards", we need that data.
-    // Let's send full state to everyone for "1 hour" simplicity.
-    return {
-        players: game.players,
-        centralScales: game.centralScales,
-        turn: game.turn,
-        status: game.status,
-        drawPileCount: game.drawPile.length
-    };
+function startGame() {
+    const dealt = dealer.dealGame();
+
+    // P1 recibe su estado y el resumen de P2
+    p1.socket.emit('game_start', {
+        role: 'p1',
+        opponentName: p2.name,
+        yourState: dealt.human,
+        oppCount: { hand: dealt.opponent.hand.length, reserve: dealt.opponent.reserve.length }
+    });
+
+    // P2 recibe su estado (el del 'opponent' en el dealer) y el resumen de P1
+    p2.socket.emit('game_start', {
+        role: 'p2',
+        opponentName: p1.name,
+        yourState: dealt.opponent,
+        oppCount: { hand: dealt.human.hand.length, reserve: dealt.human.reserve.length }
+    });
 }
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`listening on *:${PORT}`);
+httpServer.listen(PORT, () => {
+    console.log(`Server unificado corriendo en http://localhost:${PORT}`);
 });
