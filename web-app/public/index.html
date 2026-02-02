@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego 26</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="login-screen">
+        <h1>Juego 26</h1>
+        <input type="text" id="player-name" placeholder="Tu Nombre" />
+        <button id="join-btn">Unirse al Juego</button>
+        <p id="status">Introduzca su nombre y únase.</p>
+    </div>
+
+    <div id="game-screen" class="hidden">
+        <div id="opponent-area">
+            <h3><span id="opp-name-display">Oponente</span></h3>
+            <div class="hand-back" id="opp-hand"></div>
+            <div class="reserve-pile" id="opp-reserve">Reserva: <span id="opp-reserve-count">20</span></div>
+            <div class="discards" id="opp-discards">
+                <div class="pile"></div>
+                <div class="pile"></div>
+                <div class="pile"></div>
+                <div class="pile"></div>
+            </div>
+        </div>
+
+        <div id="central-area">
+            <h3>Escalas Centrales</h3>
+            <div class="scales" id="scales-container">
+                <div class="scale" data-index="0"></div>
+                <div class="scale" data-index="1"></div>
+                <div class="scale" data-index="2"></div>
+                <div class="scale" data-index="3"></div>
+            </div>
+        </div>
+
+        <div id="player-area">
+            <h3><span id="my-name-display">Tu</span> <span id="turn-indicator">ES TU TURNO</span></h3>
+            <div class="discards" id="my-discards">
+                <div class="pile" onclick="selectDiscardTarget(0)"></div>
+                <div class="pile" onclick="selectDiscardTarget(1)"></div>
+                <div class="pile" onclick="selectDiscardTarget(2)"></div>
+                <div class="pile" onclick="selectDiscardTarget(3)"></div>
+            </div>
+            <div class="reserve-pile" id="my-reserve" onclick="selectSource('reserve', 0)">
+                Reserve: <span id="my-reserve-count">20</span>
+                <div id="my-reserve-top"></div>
+            </div>
+
+            <div class="joker-reserve" id="my-joker-reserve">
+                Jokers: <span id="my-joker-count">0</span>
+            </div>
+
+            <div class="hand" id="my-hand"></div>
+        </div>
+    </div>
+
+
+    <!-- Cheat Sheet Modal -->
+    <div id="cheat-sheet-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-btn" onclick="toggleCheatSheet()">×</span>
+            <h2>Ayuda / Cheat Sheet</h2>
+            <ul>
+                <li><strong>Objetivo:</strong> Vaciar tu Pila de Reserva (20 cartas).</li>
+                <li><strong>Escalas Centrales:</strong> Deben formarse del 1 al 12 en orden ascendente.
+                    <br><em>Ejemplo:</em> 1 (As), 2, 3 ... 11 (J), 12 (Q/K).
+                </li>
+                <li><strong>Comodines (Jokers):</strong> Reemplazan cualquier carta.
+                    <br><span style="color:red">Regla:</span> No pueden usarse para iniciar (1) ni cerrar (12) una
+                    escala, ni ponerse dos seguidos.
+                </li>
+                <li><strong>Turno:</strong>
+                    <br>1. Juega cartas de tu Mano o Reserva a las Escalas.
+                    <br>2. Para terminar, descarta una carta de tu mano a tus Pilas de Descarte.
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Help Button -->
+    <button id="help-btn" onclick="toggleCheatSheet()">?</button>
+
+    <script src="/socket.io/socket.io.js"></script>
+
+    <script src="/common/game-logic.js"></script> <!-- Load shared logic if needed or just use server state -->
+    <script src="client.js"></script>
+</body>
+
+</html>
